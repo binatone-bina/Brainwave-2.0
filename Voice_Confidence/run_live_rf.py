@@ -2,19 +2,17 @@ import pyaudio
 import numpy as np
 import joblib
 import librosa
-from features import extract_features # Your extractor
+from features import extract_features 
 
-# Load the trained Random Forest
+# Loading our model
 model = joblib.load("Voice_Confidence\confidence_rf_model.pkl")
 
 # Configuration
 SAMPLE_RATE = 22050
-DURATION = 3 # Analyze last 3 seconds
+DURATION = 5 # Analyze last 3 seconds
 CHUNK_SIZE = 1024
 
-# --- LINGUISTIC UNCERTAINTY (Logic Based) ---
-# Since we don't have a real-time transcriber (too heavy), we use 
-# "Filler Detection" as a proxy for linguistic uncertainty.
+# Using filter detection
 def get_linguistic_penalty(audio_chunk, sr):
     """
     Checks for 'Droning' (Ummm/Ahhh).
@@ -26,10 +24,9 @@ def get_linguistic_penalty(audio_chunk, sr):
     
     # If sound is very flat (pure tone) and long -> Likely a filler "Ummmmm"
     if avg_flatness < 0.01:
-        return 0.5 # 50% penalty
-    return 1.0 # No penalty
+        return 0.5
+    return 1.0
 
-# --- MAIN LOOP ---
 p = pyaudio.PyAudio()
 stream = p.open(format=pyaudio.paFloat32, channels=1, rate=SAMPLE_RATE, input=True, frames_per_buffer=CHUNK_SIZE)
 buffer = np.zeros(SAMPLE_RATE * DURATION, dtype=np.float32)
