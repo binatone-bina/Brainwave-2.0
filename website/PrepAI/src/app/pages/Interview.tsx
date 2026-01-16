@@ -179,14 +179,57 @@ export default function Interview() {
     };
   }, [cameraEnabled]);
 
+  // Helper to extract data from JWT token
+  const getUserIdFromToken = () => {
+    try {
+      let token = localStorage.getItem('token');
+      if (!token) return "guest_user";
+
+      // 1. Clean the token (Remove 'Bearer ' if it exists)
+      if (token.startsWith('Bearer ')) {
+        token = token.slice(7).trim();
+      }
+
+      // 2. Decode the payload safely
+      const base64Url = token.split('.')[1];
+      if (!base64Url) return "invalid_token";
+
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+
+      const decoded = JSON.parse(jsonPayload);
+      
+      // 🔍 DEBUG: This will print your token data in the console!
+      console.log("🔍 DECIPHERED TOKEN:", decoded); 
+
+      // 3. Try to find the ID in all common locations
+      // Check 'id', '_id', 'userId', 'sub' (subject), or nested inside 'user' object
+      return decoded.id || decoded._id || decoded.userId || decoded.sub || decoded.user?.id || decoded.user?._id || "unknown_user";
+    
+    } catch (error) {
+      console.error("❌ Token Decode Error:", error);
+      return "guest_user";
+    }
+  };
+
   // 4. UPDATED SAVE FUNCTION
   const saveInterviewData = async (finalData: any) => {
+
+    
     try {
-      console.log("💾 Sending data to Backend...");
-      
+      // Get ID using the new robust function
+      const realUserId = getUserIdFromToken();
+      console.log("💾 Sending data for User ID:", realUserId);
+
+      if (realUserId === "unknown_user" || realUserId === "guest_user") {
+        console.warn("⚠️ Warning: User ID could not be found in token.");
+      }
+
       const payload = {
-        userId: "user_123", // Replace with real user ID
-        duration: durationRef.current, // <--- SENDING THE EXACT DURATION
+        userId: realUserId, 
+        duration: durationRef.current,
         scores: {
           attention: finalData.attention,
           stability: finalData.stability,
@@ -195,11 +238,13 @@ export default function Interview() {
         }
       };
 
+      // ... existing fetch code ...
       const response = await fetch('http://localhost:5000/api/interviews/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
+      // ...
 
       if (response.ok) {
         console.log("✅ Saved successfully!");
@@ -218,7 +263,6 @@ export default function Interview() {
     } else {
       setCameraEnabled(false);
     }
-    navigate('/dashboard');
   };
 
   const handleSendAnswer = () => {
@@ -239,10 +283,13 @@ export default function Interview() {
       <video ref={videoRef} autoPlay playsInline muted className="hidden" />
       <canvas ref={canvasRef} className="hidden" />
 
+      {/* ... inside the return (...) statement ... */}
+
       {/* Top Bar */}
       <div className="bg-gray-900/50 backdrop-blur-md border-b border-gray-700/50">
         <div className="max-w-[1800px] mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
+            {/* Left side (Logo/Title) - Unchanged */}
             <div className="flex items-center gap-4">
               <div className={`w-10 h-10 bg-gradient-to-br rounded-xl flex items-center justify-center ${mode === 'interview' ? 'from-teal-400 to-indigo-500' : 'from-pink-400 to-purple-500'}`}>
                 <Video className="w-5 h-5 text-white" />
@@ -253,15 +300,28 @@ export default function Interview() {
               </div>
             </div>
             
+            {/* Right side (Timer & Buttons) - UPDATED */}
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2 bg-gray-800/50 px-4 py-2 rounded-lg border border-gray-700">
                 <Clock className={`w-5 h-5 ${mode === 'interview' ? 'text-teal-400' : 'text-pink-400'}`} />
                 <span className="text-white font-mono text-lg">{formatDuration(duration)}</span>
               </div>
               
-              <button onClick={handleEndInterview} className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-lg transition-colors font-medium">
-                End Interview
-              </button>
+              {isActive ? (
+                <button 
+                  onClick={handleEndInterview} 
+                  className="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-lg transition-colors font-medium"
+                >
+                  End Interview
+                </button>
+              ) : (
+                <button 
+                  onClick={() => navigate('/home')} 
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg transition-colors font-medium flex items-center gap-2 animate-in fade-in zoom-in duration-300"
+                >
+                  Return to Dashboard <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         </div>
